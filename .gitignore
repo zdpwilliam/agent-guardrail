@@ -1,8 +1,7 @@
 # macOS
 .DS_Store
 
-# github
-# 注意：.github/ 不忽略——CI 工作流属于团队资产
+# hypothesis
 .hypothesis/
 
 # Python
