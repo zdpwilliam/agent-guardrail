@@ -1,0 +1,20 @@
+services:
+  shop:
+    build: .
+    command: uvicorn shop.main:app --host 0.0.0.0 --port 8100
+    ports: ["8100:8100"]
+    environment:
+      - SHOP_DB_PATH=/data/shop.db
+    volumes: ["shop-data:/data"]
+  gateway:
+    build: .
+    command: uvicorn guardrail.main:app --host 0.0.0.0 --port 8000
+    ports: ["8000:8000"]
+    environment:
+      - SHOP_BASE_URL=http://shop:8100
+      - GATEWAY_DB_PATH=/data/gateway.db
+    volumes: ["gateway-data:/data"]
+    depends_on: [shop]
+volumes:
+  shop-data:
+  gateway-data:

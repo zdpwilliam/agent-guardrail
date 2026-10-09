@@ -1,0 +1,29 @@
+# corp 域单次策略（v0.3，spec §18.1 的第二个领域）。与 ecommerce 策略同一
+# schema、同一 fail-closed 立场：域隔离靠权限表，不靠注册表分裂。
+version: 1
+
+# 覆盖范围：本策略只管 corp 域工具（lint 的全工具授权检查按此缩域）。
+covers: [list_files, read_file, write_file, send_email,
+         read_forum, post_forum, create_ticket, execute_wire]
+
+permissions:
+  corp_agent:
+    - list_files
+    - read_file
+    - write_file
+    - send_email
+    - read_forum
+    - post_forum
+    - create_ticket
+    - execute_wire
+
+rules:
+  # dual-control-wire 语义的单次层映射：大额电汇（>5000 美元）不允许在
+  # 单次调用路径直接执行——必须走计划级审批（提交计划 → 投影 → 审批人
+  # 批准）。诚实说明：Bench-Corp 的 authority 语义是「批准后可执行」，
+  # 本项目无「计划批准豁免单次规则」机制，故 ok 路径无法在无 LLM 转译下
+  # 表达，该场景只出 attack case（见 eval/cases_bench_corp.yaml 转译注记）。
+  - id: wire_requires_approval
+    match: {tool: execute_wire}
+    deny_if: "args.amount_cents > 500000"
+    message: "大额电汇须经计划级审批路径执行，单次调用拒绝"

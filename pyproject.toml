@@ -1,0 +1,60 @@
+[project]
+name = "agent-guardrail"
+description = "会话级 Agent 风险护栏：组合风险 / 风险预算 / 计划级审批 / 跨 Agent 合并算子"
+keywords = ["ai-agents", "guardrail", "security", "e-commerce", "mcp"]
+license = {text = "MIT"}
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Security",
+]
+version = "1.2.0"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "aiosqlite>=0.20",
+    "httpx>=0.27",
+    "pyyaml>=6.0",
+    "jsonschema>=4.23",
+    "jinja2>=3.1.6",
+    "python-multipart>=0.0.32",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "hypothesis>=6.115",
+    "asgi-lifespan>=2.1",
+    "ruff>=0.7",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/guardrail", "shop"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "N", "ANN"]
+
+# 测试与 fixture 不做类型标注——pytest 的 fixture 注入依赖未标注的参数名，
+# 强行标注会让每个测试都多出一行噪音，而收益为零。
+# 源码（src/、shop/）仍然强制 ANN。
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["ANN"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["src", "."]
+markers = [
+    "slow: 全量评测门槛测试",
+]

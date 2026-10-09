@@ -1,0 +1,13 @@
+# 计划级审批的分级策略（spec §4.4）。与 single_call / combined_risk 同一立场：
+# 系数全部可配置（§18.3），缺文件 / 自检不过拒绝启动。
+version: 1
+
+# token TTL：批准后 15 分钟内必须执行完，超时 expired（§4.6）。
+token_ttl_minutes: 15
+
+# low（自动批准）的预算下限：会话剩余预算仍高于 flag 线才免审。
+# 低于它说明这个会话已经在高风险区，计划的每个动作都该过人眼。
+low_budget_floor: 0.30
+
+# high 的两条路：投影触发任一 deny 级组合规则；或 warn 命中数 ≥ 此阈值。
+high_warn_count: 2

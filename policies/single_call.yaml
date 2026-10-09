@@ -1,0 +1,91 @@
+# 单次策略（spec §6）。策略即数据：网关启动时加载并自检，缺文件 / 解析失败 /
+# 自检不过一律拒绝启动（spec §10.2 fail-closed）。
+#
+# 规则有两种形态，互斥：
+#   语法层  deny_if                          —— 读参数即可判定，不需要投影。
+#   结果层  cap_field + max + compute_from   —— 从投影结果态读值，不信 args。
+version: 1
+
+# 覆盖范围：本策略只管电商域工具（v0.3 起 corp 域工具由 corp 策略管）。
+covers: [list_products, get_product, get_order, update_price, update_stock,
+          create_coupon, create_order, refund_order, send_email]
+
+# 权限表（spec §6.1 第 5 步）。**未列出的 agent 没有任何工具权限**：
+# 新增 agent 必须显式授权，不会自动继承全量。这比「默认放行」重要得多——
+# 默认放行意味着漏配一次就等于交付了一个越权 Agent。
+permissions:
+  # 定价 Agent：只管价格与库存。spec §13 场景 4 的 pricing_agent。
+  pricing_agent:
+    - list_products
+    - get_product
+    - update_price
+    - update_stock
+  # 营销 Agent：发券、下单，外加邮件出口（污点汇，spec §3.4③）。
+  marketing_agent:
+    - list_products
+    - get_product
+    - create_coupon
+    - create_order
+    - send_email
+  # 运营：全量。demo 里的普通会话用它。
+  ops_agent:
+    - list_products
+    - get_product
+    - get_order
+    - update_price
+    - update_stock
+    - create_coupon
+    - create_order
+    - refund_order
+    - send_email
+  # 风控观察员：只读。
+  risk_auditor:
+    - list_products
+    - get_product
+    - get_order
+  # corp 域 agent（v0.3 第二领域）：只授 corp 工具——与电商工具互斥，
+  # 域隔离靠权限表而非注册表分裂（spec §18.1 域是显式可控成本）。
+  corp_agent:
+    - list_files
+    - read_file
+    - write_file
+    - send_email
+
+rules:
+  # 语法层：单次降价上限。spec §13 场景 1 的判定依据。
+  - id: max_single_price_cut
+    match: {tool: update_price}
+    deny_if: "abs(args.delta_pct) > 10"
+    message: "单次降价不得超过 10%"
+
+  # 语法层：单次库存调整上限。防止一次 -999999 把库存打穿。
+  - id: max_single_stock_delta
+    match: {tool: update_stock}
+    deny_if: "abs(args.delta) > 500"
+    message: "单次库存调整不得超过 500 件"
+
+  # 语法层：券折扣率上限。
+  # 阈值取 80 而不是更严的数字，是**给组合风险留出可触发的区间**：序列型规则
+  # （spec §3.4②「发一张 ≥50% 的券再自己下单核销」）需要 50~80 区间的券能真的
+  # 发出去，否则计划 ③ 的场景永远触发不了。两层策略之间必须留缝——
+  # 这也是为什么「阈值」不能拍脑袋，得看清它会挡掉谁。
+  - id: max_coupon_discount
+    match: {tool: create_coupon}
+    deny_if: "args.discount_pct > 80"
+    message: "单张优惠券折扣不得超过 80%"
+
+  # 语法层：带券订单的数量上限。顺带覆盖 args 可选参数的表达式求值路径。
+  - id: no_discounted_bulk_order
+    match: {tool: create_order}
+    deny_if: "args.coupon_id != null and args.qty >= 50"
+    message: "带券订单数量不得超过 49 件"
+
+  # 结果层：单笔订单金额上限。金额从**投影后的订单终态**读（unit_price × qty），
+  # 不读 args——模型可以谎报 args 里的任何数字，谎报不了投影结果（spec §6.3）。
+  # 单位是整数分，与全局约束一致。50000 分 = 500.00 元。
+  - id: cap_order_amount
+    match: {tool: create_order}
+    cap_field: total_amount_cents
+    max: 50000
+    compute_from: resulting_state
+    message: "单笔订单金额不得超过 500.00 元"

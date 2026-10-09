@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="bg-white rounded-lg shadow p-5 mb-4">
+  <div class="flex items-center justify-between">
+    <div>
+      <h1 class="text-lg font-bold font-mono">{{ record.session_id[:20] }}</h1>
+      <span class="text-xs px-2 py-0.5 rounded bg-slate-100">{{ record.agent_id }}</span>
+      {% if record.task_id %}<span class="ml-1 text-xs text-slate-400">task: {{ record.task_id }}</span>{% endif %}
+      {% if flagged %}<span class="ml-1 text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700">flagged</span>{% endif %}
+    </div>
+    <span class="text-sm font-mono">预算 {{ "%.2f"|format(budget) }}</span>
+  </div>
+  <div class="mt-3 h-3 w-full bg-slate-200 rounded-full overflow-hidden">
+    <div class="h-full {{ color }}" style="width: {{ width }}%"></div>
+  </div>
+  <p class="mt-1 text-xs text-slate-400">
+    绿 &gt; 0.30 · 黄 0.10–0.30 · 红 ≤ 0.10（spec §9.2①——组合风险唯一能一眼看懂的形式）
+  </p>
+</div>
+
+<div class="bg-white rounded-lg shadow p-5 mb-4">
+  <h2 class="font-semibold mb-2">实体影响 Δ</h2>
+  {% for key, d in entities.items() %}
+    <div class="text-sm font-mono">
+      {{ key }}：价格 {{ "%.1f"|format(d.price_delta_pct) }}% · 库存 {{ d.stock_delta }} · 券 {{ "%.1f"|format(d.coupon_rate_delta) }}%
+    </div>
+  {% else %}
+    <p class="text-slate-400 text-sm">无累积影响</p>
+  {% endfor %}
+  {% if taint %}
+    <p class="mt-2 text-sm">污点：{% for t in taint %}<span class="mr-1 text-xs px-2 py-0.5 rounded bg-red-100 text-red-700">{{ t }}</span>{% endfor %}</p>
+  {% endif %}
+</div>
+
+<div class="bg-white rounded-lg shadow p-5 mb-4">
+  <h2 class="font-semibold mb-2">计划</h2>
+  {% for p in plans %}
+    <a href="/console/plans/{{ p.plan_id }}" class="block border rounded p-3 mb-2 hover:bg-slate-50">
+      <span class="font-mono text-sm">{{ p.plan_id[:12] }}</span>
+      <span class="ml-2 px-2 py-0.5 rounded text-xs
+        {% if p.status == 'approved' %}bg-emerald-100 text-emerald-700
+        {% elif p.status == 'pending' %}bg-amber-100 text-amber-700
+        {% elif p.status == 'rejected' %}bg-red-100 text-red-700
+        {% else %}bg-slate-100{% endif %}">{{ p.status }}</span>
+      <span class="ml-2 text-sm">{{ p.intent }}</span>
+      <span class="ml-2 text-xs text-slate-400">{{ p.actions|length }} 步</span>
+    </a>
+  {% else %}
+    <p class="text-slate-400 text-sm">该会话没有提交过计划</p>
+  {% endfor %}
+</div>
+
+<div class="bg-white rounded-lg shadow p-5">
+  <h2 class="font-semibold mb-2">审计时间线</h2>
+  {% for e in timeline | reverse %}
+    <div class="border-l-2 pl-4 py-2 {% if e.decision == 'deny' %}border-red-400{% elif e.decision == 'ask' %}border-amber-400{% else %}border-emerald-400{% endif %}">
+      <div class="flex items-center gap-2">
+        <span class="px-2 py-0.5 rounded text-xs
+          {% if e.decision == 'deny' %}bg-red-100 text-red-700
+          {% elif e.decision == 'ask' %}bg-amber-100 text-amber-700
+          {% else %}bg-emerald-100 text-emerald-700{% endif %}">{{ e.decision }}</span>
+        <span class="font-mono text-sm">{{ e.tool }}</span>
+        <span class="text-xs text-slate-400 font-mono">#{{ e.seq }} · {{ e.hash8 }}</span>
+      </div>
+      {% if e.reasons %}
+        <details class="mt-1"><summary class="text-xs text-slate-500 cursor-pointer">理由</summary>
+          <ul class="text-xs text-slate-600 list-disc ml-4 mt-1">
+            {% for r in e.reasons %}{% if r %}<li>{{ r }}</li>{% endif %}{% endfor %}
+          </ul>
+        </details>
+      {% endif %}
+    </div>
+  {% else %}
+    <p class="text-slate-400 text-sm">暂无审计记录</p>
+  {% endfor %}
+</div>
+{% endblock %}

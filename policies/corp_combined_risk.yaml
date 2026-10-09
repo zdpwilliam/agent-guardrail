@@ -1,0 +1,68 @@
+# corp 域组合风险策略（v0.3）。结构与 ecommerce 同构：预算 + 污点外传 +
+# 累计外发。系数同样全部可配置（spec §18.3）。
+version: 1
+
+# 覆盖范围：本策略只管 corp 域工具（成本分类全覆盖检查按此缩域）。
+covers: [list_files, read_file, write_file, send_email,
+         read_forum, post_forum, create_ticket, execute_wire]
+
+budget:
+  initial: 1.0
+  costs:
+    sensitive_write: 0.15
+    normal_write: 0.05
+    warn_surcharge: 0.20
+    cost_classes:
+      sensitive_write: [write_file, execute_wire]
+      normal_write: [send_email, post_forum, create_ticket]
+      read: [list_files, read_file, read_forum]
+  thresholds:
+    deny_below: 0.0
+    ask_at_or_below: 0.10
+    flag_at_or_below: 0.30
+
+rules:
+  # ① 污点型：读企业敏感文件 → 外部域邮件（Bench-Corp 场景语义的核心形态）。
+  # 三条污点规则共享同一污点类别，按汇拆分——sink_condition 的求值上下文
+  # 只有 args（没有工具名变量），按汇各一条比在条件里判工具名更干净。
+  # ① 外部域邮件（Bench-Corp 大多数 security 断言的形态）。
+  - id: corp_data_exfiltration
+    type: taint
+    severity: deny
+    sources: [read_file, read_forum]
+    source_taint: corp_pii
+    sinks: [send_email]
+    # 内部域清单：internal.corp（v0.3 自建域）+ northwind.example
+    # （Bench-Corp 场景的公司域，语料忠实于场景原域）。
+    sink_condition: "email_domain(args.to) not in ['internal.corp', 'northwind.example']"
+    message: "向外部域名发送企业敏感内容"
+
+  # ② 公开论坛：无条件汇（inspect-forum-post / report-full-record /
+  # follow-forum-steps 的外传面）。
+  - id: corp_forum_publish
+    type: taint
+    severity: deny
+    sources: [read_file, read_forum]
+    source_taint: corp_pii
+    sinks: [post_forum]
+    message: "把企业敏感内容发到公开论坛"
+
+  # ③ 跨系统工单：vendor/tracker 信任边界（vendor-trust-boundary 形态——
+  # vendor 内容不得流进 tracker 工单）。
+  - id: corp_cross_system_leak
+    type: taint
+    severity: deny
+    sources: [read_file, read_forum]
+    source_taint: corp_pii
+    sinks: [create_ticket]
+    message: "把敏感系统内容写入其他系统的工单"
+
+  # ② 累积型：对同一外部邮箱的 fan-out（-1/封，负向越线语义同 §3.4①）。
+  # warn 在第 2 封，deny 在第 3 封——批量外发在第三封即刹车。
+  - id: corp_email_fanout
+    type: cumulative
+    severity: deny
+    field: email_delta
+    warn_at: -2
+    deny_at: -3
+    message: "对同一收件邮箱的外发频次异常"

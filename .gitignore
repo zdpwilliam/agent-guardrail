@@ -1,0 +1,59 @@
+# macOS
+.DS_Store
+
+# github
+# 注意：.github/ 不忽略——CI 工作流属于团队资产
+.hypothesis/
+
+# Python
+__pycache__/
+__pypackages__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.uv-cache/
+.uv-cache-audit/
+
+# 构建产物
+dist/
+build/
+
+# 覆盖率
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# 运行时数据（仅忽略 SQLite 库与审计链，保留 data/ 下的种子/schema 文件）
+data/*.db
+data/*.db-journal
+data/*.sqlite3
+*.db
+*.db-journal
+*.sqlite3
+*.log
+*.tmp
+
+# 本地配置
+.env
+.env.local
+.env.*.local
+
+# 编辑器
+.idea/
+.vscode/
+
+# Superpowers 执行台账（本机进度记录）
+.superpowers/
+
+# WorkBuddy 沙箱下系统 TMPDIR 不可写（tmp_path fixture 会 PermissionError），
+# 把 pytest 临时目录固定在项目内。
+.pytest_tmp/
+.workbuddy/

@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="bg-white rounded-lg shadow p-5 mb-4">
+  <div class="flex items-center justify-between">
+    <h1 class="text-lg font-bold">计划 <span class="font-mono">{{ plan.plan_id[:16] }}</span></h1>
+    <span class="px-2 py-0.5 rounded text-xs
+      {% if plan.risk_level == 'high' %}bg-red-100 text-red-700
+      {% elif plan.risk_level == 'medium' %}bg-amber-100 text-amber-700
+      {% else %}bg-emerald-100 text-emerald-700{% endif %}">{{ plan.risk_level or '—' }}</span>
+  </div>
+  <p class="text-sm text-slate-600 mt-1">意图：{{ plan.intent or '（未填写）' }}
+    <span class="text-xs text-slate-400 ml-2">—— intent 纯展示，绝不参与判定（可能被注入污染）</span></p>
+  <p class="text-sm mt-1">状态：
+    <span class="px-2 py-0.5 rounded text-xs
+      {% if plan.status == 'approved' %}bg-emerald-100 text-emerald-700
+      {% elif plan.status == 'pending' %}bg-amber-100 text-amber-700
+      {% elif plan.status == 'rejected' %}bg-red-100 text-red-700
+      {% elif plan.status == 'partially_applied' %}bg-red-100 text-red-700
+      {% else %}bg-slate-100{% endif %}">{{ plan.status }}</span>
+    {% if plan.decided_by %}<span class="ml-2 text-xs text-slate-500">审批人：{{ plan.decided_by }}</span>{% endif %}
+  </p>
+  {% if plan.triggered_rules %}
+    <p class="mt-2 text-sm">触发规则：{% for r in plan.triggered_rules %}<span class="mr-1 font-mono text-xs px-2 py-0.5 rounded bg-red-50 text-red-700">{{ r }}</span>{% endfor %}</p>
+  {% endif %}
+</div>
+
+<div class="grid grid-cols-2 gap-4 mb-4">
+  <div class="bg-white rounded-lg shadow p-5">
+    <h2 class="font-semibold mb-2">动作列表（{{ plan.actions|length }} 步）</h2>
+    {% for a in plan.actions %}
+      <div class="text-xs font-mono border-b py-1">
+        <span class="text-slate-400">#{{ a.step }}</span>
+        <span class="font-semibold">{{ a.tool }}</span>
+        <span class="text-slate-500">{{ a.args }}</span>
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="bg-white rounded-lg shadow p-5">
+    <h2 class="font-semibold mb-2">终态对比</h2>
+    {% if metrics %}
+      <table class="w-full text-sm">
+        <tr class="text-slate-400 text-xs"><td class="py-1"></td><td>当前</td><td>计划执行后</td></tr>
+        <tr>
+          <td class="py-1">毛利率</td>
+          <td class="font-mono">{{ "%.1f"|format(metrics.gross_margin_pct_before) }}%</td>
+          <td class="font-mono {% if metrics.gross_margin_pct_after < metrics.gross_margin_pct_before %}text-red-600 font-bold{% endif %}">
+            {{ "%.1f"|format(metrics.gross_margin_pct_after) }}%{% if metrics.gross_margin_pct_after < metrics.gross_margin_pct_before %} ←{% endif %}
+          </td>
+        </tr>
+        <tr>
+          <td class="py-1">平均售价</td>
+          <td class="font-mono">¥{{ "%.0f"|format(metrics.avg_price_cents_before / 100) }}</td>
+          <td class="font-mono">¥{{ "%.0f"|format(metrics.avg_price_cents_after / 100) }}</td>
+        </tr>
+        <tr>
+          <td class="py-1">受影响商品数</td>
+          <td class="font-mono">0</td>
+          <td class="font-mono">{{ metrics.affected_product_count }}</td>
+        </tr>
+        <tr>
+          <td class="py-1">现金影响</td>
+          <td class="font-mono">—</td>
+          <td class="font-mono {% if metrics.cash_impact_cents < 0 %}text-red-600{% endif %}">¥{{ "%.0f"|format(metrics.cash_impact_cents / 100) }}</td>
+        </tr>
+      </table>
+    {% else %}
+      <p class="text-slate-400 text-sm">无投影数据</p>
+    {% endif %}
+    {% if delta %}
+      <h3 class="text-xs font-semibold text-slate-500 mt-3 mb-1">受影响实体的 Δ 终态</h3>
+      {% for key, d in delta.items() %}
+        <div class="text-xs font-mono">{{ key }}：价格 {{ "%.1f"|format(d.price_delta_pct) }}%</div>
+      {% endfor %}
+    {% endif %}
+  </div>
+</div>
+
+{% if plan.status == 'pending' %}
+<div class="bg-white rounded-lg shadow p-5" id="resolve-box">
+  <h2 class="font-semibold mb-3">审批决定</h2>
+  <form method="post" action="/console/plans/{{ plan.plan_id }}/resolve" class="flex items-center gap-3">
+    <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+    <input type="hidden" name="resolution" value="approve">
+    <input name="decided_by" placeholder="你的名字" class="border rounded px-3 py-1.5 text-sm">
+    <button class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1.5 rounded text-sm">批准并签发 token</button>
+  </form>
+  <form method="post" action="/console/plans/{{ plan.plan_id }}/resolve" class="flex items-center gap-3 mt-2">
+    <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+    <input type="hidden" name="resolution" value="reject">
+    <input name="decided_by" placeholder="你的名字" class="border rounded px-3 py-1.5 text-sm">
+    <button class="bg-red-600 hover:bg-red-700 text-white px-4 py-1.5 rounded text-sm">拒绝</button>
+  </form>
+</div>
+{% endif %}
+
+{% if plan.token() %}
+<div class="bg-white rounded-lg shadow p-5 mb-4">
+  <h2 class="font-semibold mb-2">plan_token</h2>
+  <p class="text-xs text-slate-500">有效期至 {{ plan.token_expires_at }}</p>
+  <div class="text-xs font-mono text-slate-600 mt-1">
+    {% for h in action_hashes %}<div>{{ h }}…</div>{% endfor %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}

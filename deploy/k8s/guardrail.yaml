@@ -1,0 +1,194 @@
+# agent-guardrail v1.2.0 单节点生产部署清单
+# 用法：先创建 guardrail-console Secret，再 kubectl apply -f deploy/k8s/
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: guardrail
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gateway-data
+  namespace: guardrail
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: shop-data
+  namespace: guardrail
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shop
+  namespace: guardrail
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: {app: shop}
+  template:
+    metadata:
+      labels: {app: shop}
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: shop
+          image: agent-guardrail:1.2.0
+          imagePullPolicy: IfNotPresent
+          command: ["uvicorn", "shop.main:app", "--host", "0.0.0.0", "--port", "8100"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          env:
+            - name: SHOP_DB_PATH
+              value: /data/shop.db
+          ports: [{containerPort: 8100}]
+          volumeMounts:
+            - {name: data, mountPath: /data}
+            - {name: tmp, mountPath: /tmp}
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: 500m, memory: 512Mi}
+          livenessProbe:
+            httpGet: {path: /healthz, port: 8100}
+            initialDelaySeconds: 3
+          readinessProbe:
+            httpGet: {path: /readyz, port: 8100}
+            initialDelaySeconds: 3
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile: {type: RuntimeDefault}
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: shop-data}
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: shop
+  namespace: guardrail
+spec:
+  selector: {app: shop}
+  ports: [{port: 8100, targetPort: 8100}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+  namespace: guardrail
+spec:
+  # SQLite 是单写者。生产配置固定为单副本单 worker；需要横向扩展时先替换外置存储。
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: {app: gateway}
+  template:
+    metadata:
+      labels: {app: gateway}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: gateway
+          image: agent-guardrail:1.2.0
+          imagePullPolicy: IfNotPresent
+          command: ["uvicorn", "guardrail.main:app",
+                    "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          env:
+            - name: GUARDRAIL_ENV
+              value: production
+            - name: SHOP_BASE_URL
+              value: "http://shop:8100"
+            - name: GATEWAY_DB_PATH
+              value: /data/gateway.db
+            - name: GUARDRAIL_CONSOLE_KEY
+              valueFrom:
+                secretKeyRef: {name: guardrail-console, key: console-key}
+            - name: GUARDRAIL_CONSOLE_APPROVER_ID
+              value: security_lead
+            - name: GUARDRAIL_AGENT_API_KEYS
+              valueFrom:
+                secretKeyRef: {name: guardrail-console, key: agent-api-keys}
+            - name: GUARDRAIL_APPROVER_API_KEYS
+              valueFrom:
+                secretKeyRef: {name: guardrail-console, key: approver-api-keys}
+          ports: [{containerPort: 8000}]
+          volumeMounts:
+            - {name: data, mountPath: /data}
+            - {name: tmp, mountPath: /tmp}
+          resources:
+            requests: {cpu: 200m, memory: 256Mi}
+            limits: {cpu: "1", memory: 1Gi}
+          readinessProbe:
+            httpGet: {path: /readyz, port: 8000}
+            initialDelaySeconds: 3
+          livenessProbe:
+            httpGet: {path: /healthz, port: 8000}
+            periodSeconds: 10
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: gateway-data}
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+  namespace: guardrail
+spec:
+  type: ClusterIP
+  selector: {app: gateway}
+  ports: [{port: 8000, targetPort: 8000}]
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: guardrail
+  namespace: guardrail
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [guardrail.example.com]
+      secretName: guardrail-tls
+  rules:
+    - host: guardrail.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway
+                port: {number: 8000}

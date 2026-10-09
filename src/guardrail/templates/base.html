@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>会话风险护栏 · 控制台</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+</head>
+<body class="bg-slate-100 min-h-screen text-slate-800">
+  <nav class="bg-slate-800 text-slate-100 px-6 py-3 flex items-center gap-4">
+    <a href="/console" class="font-semibold text-lg">🛡 会话风险护栏</a>
+    <span class="text-slate-400 text-sm">控制台</span>
+  </nav>
+  <main class="max-w-5xl mx-auto p-6">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

@@ -1,0 +1,70 @@
+# 组合风险策略（spec §3）。与 single_call.yaml 同一立场：缺文件 / 解析失败 /
+# 自检不过一律拒绝启动（spec §10.2 fail-closed）。全部系数可配置（spec §18.3），
+# M7 参数扫描直接改这里，不碰代码。
+version: 1
+
+# 覆盖范围：本策略只管电商域工具（v0.3 起 corp 域工具由 corp 组合策略管）。
+covers: [list_products, get_product, get_order, update_price, update_stock,
+          create_coupon, create_order, refund_order, send_email]
+
+budget:
+  initial: 1.0
+  costs:
+    # 敏感写 = 改价、发券（spec §3.3）。分类映射显式列出全部 9 个工具，
+    # lint 强制「每工具恰分类一次」——新增工具忘了分类就该启动失败。
+    sensitive_write: 0.15
+    normal_write: 0.05
+    warn_surcharge: 0.20
+    cost_classes:
+      sensitive_write: [update_price, create_coupon, write_file]
+      normal_write: [update_stock, create_order, refund_order, send_email]
+      read: [list_products, get_product, get_order, list_files, read_file]
+  thresholds:
+    deny_below: 0.0        # budget < 0 → DENY（透支）
+    ask_at_or_below: 0.10  # ≤ 0.10 → ASK（扣下等人审批）
+    flag_at_or_below: 0.30 # ≤ 0.30 → ALLOW_WITH_FLAG（放行 + 会话标记）
+
+rules:
+  # ① 累积型：同一商品被反复降价，单次合规、累计越界（spec §3.4①）。
+  # 阈值语义是「超过」（严格 >）：恰在 -20 不告警，-20.0001 才算。
+  - id: cumulative_price_cut
+    type: cumulative
+    severity: warn
+    field: price_delta_pct
+    warn_at: -20.0
+    deny_at: -35.0
+    message: "累计降价超过阈值"
+
+  # ② 序列型：发高折扣券 → 立刻用券下单（spec §3.4②）。
+  # 券阈值 50 起步：50~80 区间的券能发出去（语法层卡 80），序列在此触发。
+  - id: coupon_self_purchase
+    type: sequence
+    severity: deny
+    steps:
+      - {tool: create_coupon, where: "args.discount_pct >= 50"}
+      - {tool: create_order, where: "args.coupon_id != null"}
+    max_gap: 3
+    message: "发高折扣券后随即用券下单"
+
+  # ③ 污点型：读订单（含手机号/地址）→ 外发邮件（spec §3.4③）。
+  # sink_condition 用注册的辅助函数 email_domain（受限表达式沙箱内）。
+  - id: customer_pii_exfiltration
+    type: taint
+    severity: deny
+    sources: [get_order]
+    source_taint: pii
+    sinks: [send_email]
+    sink_condition: "email_domain(args.to) != 'internal.corp'"
+    message: "向外部域名发送含客户信息的邮件"
+
+  # ④ 跨 Agent 型：降价 × 折扣叠加击穿成本线（spec §3.4④）。
+  # 数值修正：spec 原稿的 -25% 价会被 M2 单次阈值先拦，改用 -8% + 20% 券，
+  # multiplicative = (0.92)(0.80)-1 = -26.4% ≤ -25 触发。两步各自合规。
+  - id: price_and_coupon_stack
+    type: cross_agent
+    severity: deny
+    contributors: [pricing_agent, marketing_agent]
+    combine:
+      - {a: price_delta_pct, b: coupon_rate_delta, op: multiplicative}
+    max_combined: -25.0
+    message: "降价与折扣叠加击穿成本线"
