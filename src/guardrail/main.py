@@ -9,10 +9,12 @@ import time
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 import httpx
 from fastapi import FastAPI, Request
+from fastapi.staticfiles import StaticFiles
 from starlette.responses import JSONResponse
 
 from guardrail.api import approvals, audit, console, obs, plans_api, sessions, tools
@@ -117,7 +119,15 @@ def _apply_security_headers(response: Any, *, production: bool) -> None:  # noqa
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
     response.headers["Content-Security-Policy"] = (
-        "base-uri 'self'; object-src 'none'; frame-ancestors 'none'"
+        "default-src 'self'; "
+        "script-src 'self'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; "
+        "connect-src 'self'; "
+        "font-src 'self'; "
+        "base-uri 'self'; "
+        "object-src 'none'; "
+        "frame-ancestors 'none'"
     )
     if production:
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
@@ -175,6 +185,11 @@ def create_app(
         await backend.close()
 
     app = FastAPI(title="会话级风险护栏", lifespan=lifespan)
+    app.mount(
+        "/static",
+        StaticFiles(directory=Path(__file__).resolve().parent / "static"),
+        name="static",
+    )
     app.include_router(sessions.router)
     app.include_router(tools.router)
     app.include_router(audit.router)

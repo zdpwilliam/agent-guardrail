@@ -56,3 +56,6 @@ data/*.sqlite3
 # 把 pytest 临时目录固定在项目内。
 .pytest_tmp/
 .workbuddy/
+
+# Playwright CLI 本地会话产物
+.playwright-cli/

@@ -48,6 +48,19 @@ async def test_console_home_lists_sessions_and_budget_bar(client):
     assert 'width: 85.0%' in r.text
 
 
+async def test_console_assets_are_local_and_offline_safe(client):
+    page = await client.get("/console")
+    assert page.status_code == 200
+    assert "cdn.tailwindcss.com" not in page.text
+    assert "unpkg.com" not in page.text
+    assert "/static/console.css" in page.text
+
+    css = await client.get("/static/console.css")
+    assert css.status_code == 200
+    assert css.headers["content-type"].startswith("text/css")
+    assert "https://" not in page.headers["content-security-policy"]
+
+
 async def test_budget_bar_turns_red_when_drained(client):
     sid = await _prime_session(client)
     # 把预算打到透支区（直接改库——阶梯行为已有专测，这里只验颜色映射）。

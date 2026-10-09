@@ -623,7 +623,7 @@ Agent → POST /v1/plans   {session_id, intent, actions[]}
 ### 路径 3：人工审批
 
 ```
-人 → POST /v1/plans/{plan_id}/approve    （控制台 htmx 触发）
+人 → POST /v1/plans/{plan_id}/approve    （控制台表单触发）
 人 → POST /v1/plans/{plan_id}/reject     {comment}
 
   1. 校验计划仍为 pending 且未过期
@@ -779,7 +779,7 @@ class AuditEntry(BaseModel):
 
 ## 9. 控制台设计
 
-Tailwind CDN + htmx，服务端渲染，无构建步骤。
+本地 CSS + 服务端渲染，无构建步骤，也不依赖运行时外部 CDN。
 
 ### 9.1 页面
 
@@ -860,7 +860,7 @@ LLM 不进入决策路径。Rampart 在调研中明确解释过这一点：
 | Web | FastAPI + Pydantic v2 | 明确的请求模型与 OpenAPI 支持 |
 | 存储 | SQLite + aiosqlite（经存储协议，§19.1） | 单文件，易于演示；协议层保留替换空间 |
 | 模板 | Jinja2 | FastAPI 原生支持 |
-| 前端 | Tailwind CDN + htmx | 无构建步骤，适合单页控制台 |
+| 前端 | 本地 CSS + Jinja2 表单 | 无构建步骤、无外部 CDN，断网环境可用 |
 | HTTP 调用 | httpx | 网关与商城、适配器共用 |
 | 策略 | PyYAML + jsonschema + 受限表达式求值 | 策略即数据，避免引入通用表达式引擎 |
 | CLI | argparse | 当前命令量小，标准库足够 |
