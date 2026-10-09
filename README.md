@@ -20,7 +20,7 @@
 
 Bench-Corp 20 场景已全量处置（`make eval-bench`，14 完整转译 + 1 仅 attack 路径 + 5 skipped 归因），其中暴露的受众粒度缺口如实记录于 limitations。语料路径与标注见 `eval/`，合规映射见 [docs/owasp-mapping.md](docs/owasp-mapping.md)（5 Full / 5 Partial，逐条给边界）。
 
-**拦截率 ≠ 安全**——语料是自编的，真实攻击者的创造力不会止步于此；完整边界见 [docs/limitations.md](docs/limitations.md)。
+**拦截率 ≠ 安全**——语料是自建的，真实攻击者的创造力不会止步于此，需根据业务自建；完整边界见 [docs/limitations.md](docs/limitations.md)。
 
 设计差异来自两层状态：**会话状态三元组 (Δ, T, A)** 与 **跨 Agent 合并算子**。单次判定只能拦 25%（语法层违规），累积降价、发券即下单、PII 外发、跨 Agent 叠加击穿——这些每步单独看都合规的序列，只有组合风险层能拦。
 
@@ -28,7 +28,7 @@ Bench-Corp 20 场景已全量处置（`make eval-bench`，14 完整转译 + 1 �
 
 ## 现在能跑什么
 
-当前版本是 **v1.2.0 单节点生产基线**。它把判定链、审批链和审计链做成可部署的闭环：API key 与审批人身份、控制台登录和 CSRF、请求体限额与限流、逐行 JSON 日志、健康探针、SQLite WAL、PVC、审计脱敏与外部锚点、保留期清理，以及带 TLS 的 K8s 清单都已落地。
+当前版本是 **v1.0 单节点生产基线**。它把判定链、审批链和审计链做成可部署的闭环：API key 与审批人身份、控制台登录和 CSRF、请求体限额与限流、逐行 JSON 日志、健康探针、SQLite WAL、PVC、审计脱敏与外部锚点、保留期清理，以及带 TLS 的 K8s 清单都已落地。
 
 这里所说的生产可用，边界是**单节点、单 worker、可备份恢复**。多副本共享 SQLite、跨区域高可用、策略热加载和审批通知不在当前版本内；这些边界在 [部署说明](deploy/README.md)和 [limitations](docs/limitations.md)中明确列出。
 
