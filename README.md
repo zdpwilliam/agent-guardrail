@@ -14,40 +14,23 @@
 | 单次判定基线（逐调用判定） | 25% | 14%* |
 | **本项目** | **100%** | **0%** |
 
-*无护栏一行的误伤来自商城自身的业务校验（负库存等），不是护栏——这正是
-「拦截能力有下界、难在拦截时不误伤」的含义。
+无护栏一行的误伤来自商城自身的业务校验（负库存等），不是护栏——这正是「拦截能力有下界、难在拦截时不误伤」的含义。
 
-复现：`make eval`（输出各 OWASP 条目的对抗语料覆盖数）；第二领域
-（文件/邮件，语料 sourced 自 Bench-Corp 场景语义）见 `make eval-corp`
-——其对抗集全部为组合型攻击（每步合规），单次判定 0% 是面对这类攻击的
-真实水平，与电商域 25%（含单次违规语料）的构成不同、不可直接并排。
-Bench-Corp 20 场景已全量处置（`make eval-bench`，14 完整转译 + 1 仅 attack 路径 + 5 skipped 归因），
-其中暴露的受众粒度缺口如实记录于 limitations。语料路径与标注见
-`eval/`，合规映射见 [docs/owasp-mapping.md](docs/owasp-mapping.md)
-（5 Full / 5 Partial，逐条给边界）。**拦截率 ≠ 安全**——
-语料是自编的，真实攻击者的创造力不会止步于此；完整边界见
-[docs/limitations.md](docs/limitations.md)。
+复现：`make eval`（输出各 OWASP 条目的对抗语料覆盖数）；第二领域（文件/邮件，语料 sourced 自 Bench-Corp 场景语义）见 `make eval-corp` ——其对抗集全部为组合型攻击（每步合规），单次判定 0% 是面对这类攻击的真实水平，与电商域 25%（含单次违规语料）的构成不同、不可直接并排。
 
-设计差异来自两层状态：**会话状态三元组 (Δ, T, A)** 与
-**跨 Agent 合并算子**。单次判定只能拦 25%（语法层违规），累积降价、
-发券即下单、PII 外发、跨 Agent 叠加击穿——这些每步单独看都合规的
-序列，只有组合风险层能拦。
+Bench-Corp 20 场景已全量处置（`make eval-bench`，14 完整转译 + 1 仅 attack 路径 + 5 skipped 归因），其中暴露的受众粒度缺口如实记录于 limitations。语料路径与标注见 `eval/`，合规映射见 [docs/owasp-mapping.md](docs/owasp-mapping.md)（5 Full / 5 Partial，逐条给边界）。
 
-同类方案调研覆盖 16+ 个项目并经 2026-10-08 重爬复核（详见
-[同类方案调研 §9](docs/research/01-agent-guardrail-competitive-analysis.md)）：
-最接近的先行者是 OpenAPPA（跨调用数据流污点，1.5k★）与 cordum（job 级审批），
-但**数值组合风险、预算阶梯、跨 Agent 合并、计划级投影审批**四项仍无人做。
+**拦截率 ≠ 安全**——语料是自编的，真实攻击者的创造力不会止步于此；完整边界见 [docs/limitations.md](docs/limitations.md)。
+
+设计差异来自两层状态：**会话状态三元组 (Δ, T, A)** 与 **跨 Agent 合并算子**。单次判定只能拦 25%（语法层违规），累积降价、发券即下单、PII 外发、跨 Agent 叠加击穿——这些每步单独看都合规的序列，只有组合风险层能拦。
+
+同类方案调研覆盖 16+ 个项目，（详见 [同类方案调研 §9](docs/research/01-agent-guardrail-competitive-analysis.md)）：最接近的先行者是 OpenAPPA（跨调用数据流污点，1.5k★）与 cordum（job 级审批），但**数值组合风险、预算阶梯、跨 Agent 合并、计划级投影审批**四项仍无人做。
 
 ## 现在能跑什么
 
-当前版本是 **v1.2.0 单节点生产基线**。它把判定链、审批链和审计链做成可
-部署的闭环：API key 与审批人身份、控制台登录和 CSRF、请求体限额与限流、
-逐行 JSON 日志、健康探针、SQLite WAL、PVC、审计脱敏与外部锚点、保留期
-清理，以及带 TLS 的 K8s 清单都已落地。
+当前版本是 **v1.2.0 单节点生产基线**。它把判定链、审批链和审计链做成可部署的闭环：API key 与审批人身份、控制台登录和 CSRF、请求体限额与限流、逐行 JSON 日志、健康探针、SQLite WAL、PVC、审计脱敏与外部锚点、保留期清理，以及带 TLS 的 K8s 清单都已落地。
 
-这里所说的生产可用，边界是**单节点、单 worker、可备份恢复**。多副本共享
-SQLite、跨区域高可用、策略热加载和审批通知不在当前版本内；这些边界在
-[部署说明](deploy/README.md)和 [limitations](docs/limitations.md)中明确列出。
+这里所说的生产可用，边界是**单节点、单 worker、可备份恢复**。多副本共享 SQLite、跨区域高可用、策略热加载和审批通知不在当前版本内；这些边界在 [部署说明](deploy/README.md)和 [limitations](docs/limitations.md)中明确列出。
 
 ```bash
 make demo       # 一键起 商城+网关+控制台，浏览器开 http://127.0.0.1:8000/console
